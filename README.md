@@ -4,6 +4,7 @@ End‑to‑end AWS serverless pipeline we actually built and ran:
 Upload review CSVs → Automatic NLP enrichment → Daily product summarization polished with a live SageMaker DistilBART CNN 6‑6 endpoint → Stored in DynamoDB and S3 → Queried with Athena (partition projection) → Visualized in QuickSight.
 
 ---
+![POC Architecture](docs/poc_architecture.png)
 
 ## 1. Implemented Components (Exact)
 
