@@ -195,8 +195,129 @@ DailySummarizerFunction:
 - SAGEMAKER_CONTENT_TYPE (`application/json`)
 
 ---
+## 9. QuickSight Calculated Fields & Visuals
 
-## 9. Cost (Actual Structure Used)
+This section provides a copy‑paste friendly set of QuickSight calculated fields (aggregate‑safe variants included) and a visual blueprint to build an insightful, interactive dashboard.
+
+### 9.1 Calculated Fields (Name | Formula | Notes)
+
+| Name | Formula | Notes |
+|---|---|---|
+| total_reviews | `{reviews_positive} + {reviews_negative} + {reviews_mixed} + {reviews_neutral}` | Row-level total. Set default aggregation to sum in visuals. |
+| total_reviews_agg | `sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral})` | Aggregate-safe total for use directly in visuals. |
+| positive_rate | `ifelse({total_reviews}=0, 0, {reviews_positive}/{total_reviews})` | Row-level rate. Prefer the aggregate-safe variant below for visuals. |
+| positive_rate_agg | `ifelse((sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral}))=0, 0, sum({reviews_positive}) / (sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral})))` | Aggregate-safe (ratio of sums) to avoid mismatched aggregation errors. |
+| negative_rate_agg | `ifelse((sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral}))=0, 0, sum({reviews_negative}) / (sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral})))` | Aggregate-safe. |
+| mixed_rate_agg | `ifelse((sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral}))=0, 0, sum({reviews_mixed}) / (sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral})))` | Aggregate-safe. |
+| neutral_rate_agg | `ifelse((sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral}))=0, 0, sum({reviews_neutral}) / (sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral})))` | Aggregate-safe. |
+| net_sentiment | `{positive_rate} - {negative_rate}` | Row-level. Use with `avg()` in visuals. |
+| net_sentiment_agg | `{positive_rate_agg} - {negative_rate_agg}` | Aggregate-safe net sentiment. |
+| positivity_index_0_100 | `50 + 50*{net_sentiment}` | Use `avg(positivity_index_0_100)` in visuals; or build from `_agg` version. |
+| positivity_index_0_100_agg | `50 + 50*{net_sentiment_agg}` | Aggregate-safe alternative. |
+| orientation_short (CASE) | `case when lower(trim({orientation}))='predominantly positive' then 'Positive' when lower(trim({orientation}))='predominantly negative' then 'Negative' else 'Mixed' end` | Prefer CASE if `ifelse/lower` throw errors. If exact case matches, you can use simple equals without `lower/trim`. |
+| latest_flag_by_product | `ifelse(denseRank([{summary_date} DESC], [{product_id}])=1, 1, 0)` | Analysis-level calc (window function). Flags latest row per product. |
+| week_start | `truncDate('WK', {summary_date})` | Week bucket for trends. |
+| month_start | `truncDate('MM', {summary_date})` | Month bucket for trends. |
+| days_since_summary | `dateDiff('DD', {summary_date}, truncDate('DD', now()))` | Ensures DATE‑to‑DATE comparison (truncate `now()`). |
+| rolling_7d_reviews | `sumOver(sum({reviews_positive}+{reviews_negative}+{reviews_mixed}+{reviews_neutral}), [], [{summary_date ASC}], 6, 0)` | 7‑day trailing window ending on current row. Analysis-level calc. |
+| wow_net_sentiment | `periodOverPeriodDifference(avg({net_sentiment}), {summary_date}, 'WK')` | Week‑over‑week change. Analysis-level calc. |
+| wow_net_sentiment_pct | `periodOverPeriodPercentDifference(avg({net_sentiment}), {summary_date}, 'WK')` | WoW % change. Analysis-level calc. |
+| search_match | `ifelse(length(trim(${p_search}))=0, 1=1, contains(lower({summary}), lower(${p_search})))` | Always true when search parameter is empty; else case-insensitive contains. Use as a filter equals TRUE. |
+| theme_quality_sentiment | `jsonExtractScalar({theme_sentiment_json}, '$.quality.sentiment')` | Returns VARCHAR. |
+| theme_quality_count | `toInt(jsonExtractScalar({theme_sentiment_json}, '$.quality.count'))` | Cast to INT. |
+| theme_performance_sentiment | `jsonExtractScalar({theme_sentiment_json}, '$.performance.sentiment')` | — |
+| theme_performance_count | `toInt(jsonExtractScalar({theme_sentiment_json}, '$.performance.count'))` | — |
+| theme_design_sentiment | `jsonExtractScalar({theme_sentiment_json}, '$.design.sentiment')` | — |
+| theme_design_count | `toInt(jsonExtractScalar({theme_sentiment_json}, '$.design.count'))` | — |
+| theme_support_sentiment | `jsonExtractScalar({theme_sentiment_json}, '$.support.sentiment')` | — |
+| theme_support_count | `toInt(jsonExtractScalar({theme_sentiment_json}, '$.support.count'))` | — |
+| theme_value_sentiment | `jsonExtractScalar({theme_sentiment_json}, '$.value.sentiment')` | — |
+| theme_value_count | `toInt(jsonExtractScalar({theme_sentiment_json}, '$.value.count'))` | — |
+| quality_negative_flag | `ifelse(lower({theme_quality_sentiment})='negative',1,0)` | Repeat for other themes if needed. |
+| performance_negative_flag | `ifelse(lower({theme_performance_sentiment})='negative',1,0)` | — |
+| metric_selected | `ifelse(${p_metric}='Total Reviews', sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral}), ${p_metric}='Positive Rate', avg({positive_rate_agg}), ${p_metric}='Negative Rate', avg({negative_rate_agg}), ${p_metric}='Net Sentiment', avg({net_sentiment}), ${p_metric}='Positivity Index', avg({positivity_index_0_100}), sum({reviews_positive}) + sum({reviews_negative}) + sum({reviews_mixed}) + sum({reviews_neutral}))` | Keeps each branch aggregate-safe. |
+| summary_140 | `ifelse(length({summary})>140, concat(substring({summary},1,140),'…'), {summary})` | Use in tooltips and tables. |
+
+Notes:
+- Dataset-level: Simple row‑level calcs (e.g., `total_reviews`, `orientation_short`).
+- Analysis-level (inside an analysis): Window/period functions (e.g., `denseRank`, `sumOver`, `periodOverPeriodDifference`).
+- When you see “mismatched aggregation,” switch to the `_agg` variants or wrap all operands in the same aggregation.
+- Ensure `summary_date` is a Date type. If needed, parse strings or truncate `now()` to day for dateDiff.
+
+---
+
+### 9.2 Visuals Blueprint (10 visuals)
+
+1. KPI Tile Strip (Top Row)
+   - Measures: `sum(total_reviews_agg)`, `avg(positivity_index_0_100)` (or `_agg`), `avg(positive_rate_agg)`, `avg(negative_rate_agg)`, `avg(net_sentiment)`
+   - Conditional formatting:
+     - Positive rate > 0.60 = green
+     - Positive rate 0.40–0.60 = amber
+     - Positive rate < 0.40 = red
+     - Negative rate > 0.40 = red
+
+2. Time Series: Net Sentiment Over Time
+   - X: `summary_date`
+   - Y: `avg(net_sentiment)`
+   - Color (optional): `orientation_short`
+   - Enable Forecast (next 7–14 days) and Anomaly Detection (Insights).
+
+3. Stacked Bar: Orientation Mix by Product (Top N)
+   - Group: `product_id`
+   - Values: `sum(reviews_positive)`, `sum(reviews_negative)`, `sum(reviews_mixed)`, `sum(reviews_neutral)`
+   - Sort: `sum(total_reviews_agg)` descending
+   - Filter: Top `${p_top_n}` by `sum(total_reviews_agg)`
+
+4. Scatter: Positive vs Negative by Product
+   - X: `avg(positive_rate_agg)`
+   - Y: `avg(negative_rate_agg)`
+   - Size: `total_reviews_agg`
+   - Color: `orientation_short`
+   - Tooltip: `summary_140`, `positivity_index_0_100`
+
+5. Table: Latest Summaries (One Row per Product)
+   - Filter: `latest_flag_by_product = 1`
+   - Columns: `product_id`, `summary_date`, `orientation_short`, `total_reviews_agg`, `positive_rate_agg`, `negative_rate_agg`, `net_sentiment`, `summary`
+   - Conditional formatting: `orientation_short` (green/amber/red)
+   - (Optional) URL action to open the S3 JSON for the selected product/date.
+
+6. Heatmap: Theme Negativity by Product
+   - Rows: `product_id`
+   - Columns: `quality`, `performance`, `design`, `support`, `value`
+   - Values: corresponding `theme_*_count`
+   - Color rules: red if `theme_*_sentiment='negative'`, green if `'positive'`, neutral otherwise.
+
+7. Small‑Multiples Line Charts: Weekly Trend per Product
+   - Small multiple field: `product_id` (Top `${p_top_n}`)
+   - X: `week_start`
+   - Y: `avg(net_sentiment)` or `avg(positive_rate_agg)`
+
+8. Bar: Dynamic Metric by Product (Driven by Parameter)
+   - X: `product_id`
+   - Y: `metric_selected`
+   - Title bound to `${p_metric}`
+   - Sort: `metric_selected` descending
+
+9. Watchlist (Quality & Support)
+   - Bar: Top N by `avg(negative_rate_agg)` or `sum(reviews_negative)`
+   - Table filter: `negative_rate_agg > 0.4` OR `theme_quality_sentiment='negative'` OR `theme_support_sentiment='negative'`
+   - Highlight rows with high `negative_rate_agg`.
+
+10. Word Cloud (Optional)
+    - Field: `summary` (respect global filters)
+    - Exclude stopwords in visual configuration to surface topical words.
+
+---
+
+### 9.3 Quick Tips
+
+- If CASE/LOWER isn’t accepted in dataset-level edits, switch to analysis-level and/or use exact match equals.
+- Keep operands either all aggregated or all non‑aggregated in a single calc (use `_agg` variants to help).
+- For `dateDiff/truncDate`, ensure both operands are DATE/TIMESTAMP (truncate `now()` to day) to avoid type errors.
+- When window functions are disabled in dataset prep, add them in the analysis.
+---------------
+
+## 10. Cost (Actual Structure Used)
 
 | Service | Notes |
 |---------|-------|
@@ -211,7 +332,7 @@ DailySummarizerFunction:
 
 ---
 
-## 10. Repository Contents (Must Include)
+## 11. Repository Contents (Must Include)
 
 ```
 lambdas/
@@ -230,7 +351,7 @@ README.md
 
 ---
 
-## 11. Quick Start Recap
+## 12. Quick Start Recap
 
 1. Upload CSV to `uploads/`.
 2. Check DynamoDB `ReviewAnalysis` for enriched items.
@@ -241,7 +362,7 @@ README.md
 
 ---
 
-## 12. Troubleshooting (Observed Cases)
+## 13. Troubleshooting (Observed Cases)
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
