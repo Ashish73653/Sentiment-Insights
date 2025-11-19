@@ -5,7 +5,7 @@ End‑to‑end AWS serverless pipeline we built and ran:
 Upload review CSVs → Automatic NLP enrichment → Daily product summarization (polished via a live SageMaker DistilBART CNN 6‑6 endpoint) → Stored in DynamoDB & S3 → Queried with Athena (partition projection) → Visualized in QuickSight.
 
 ![POC Architecture](docs/poc_architecture.png)
-
+[**Implementation Link to Notion**](https://ash1sh1hakur10.notion.site/AWS-POC-2ac5c1423f2d808cb94fce2fdd650dc0)
 ---
 
 ## Table of Contents
@@ -287,5 +287,3 @@ README.md
 | Summary not two sentences | Validation reject polished text | Fallback deterministic summarizer executed |
 
 ---
-
-Everything documented reflects implemented, production‑tested components—no speculative future features.
