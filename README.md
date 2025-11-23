@@ -7,6 +7,10 @@ Upload review CSVs → Automatic NLP enrichment → Daily product summarization 
 ![POC Architecture](docs/poc_architecture.png)
 [**Implementation Link to Notion**](https://ash1sh1hakur10.notion.site/AWS-POC-2ac5c1423f2d808cb94fce2fdd650dc0)
 ---
+## 📺 Demo Video
+
+Watch the demo here:  
+👉 [Click to view video](https://drive.google.com/file/d/1dDj2MQYhDxokuRMMV5hpE1DezD6oIcFG/view?usp=sharing)
 
 ## Table of Contents
 1. Implemented Components
