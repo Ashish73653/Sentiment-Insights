@@ -11,6 +11,10 @@ Upload review CSVs → Automatic NLP enrichment → Daily product summarization 
 
 Watch the demo here:  
 👉 [Click to view video](https://drive.google.com/file/d/1dDj2MQYhDxokuRMMV5hpE1DezD6oIcFG/view?usp=sharing)
+---
+![POC CookBook](docs/CookBookFirstPage.png)
+Find the CookBook here:
+👉 [Click to view CookBook](https://drive.google.com/file/d/1Byw8Hx9GiX2XgGn-vmJEsVA2vB63fQML/view?usp=drive_link)
 
 ## Table of Contents
 1. Implemented Components
